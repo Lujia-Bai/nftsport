@@ -1,0 +1,227 @@
+fts.ind<- function(n = 500, N = 200, p = 3, delta = 0){
+  # mean function
+  t = (1:n)/n
+  u = (1:N)/N
+  m = (1+u)%o%(10*sin(pi*(t-0.5)) + 1) 
+  
+  # innovation function
+  a = 0.1*(u-0.5)^2+0.8
+  X = array(0, c(n,N,p))
+  E = array(0, c(n,N,p))
+  rand = matrix(rnorm(n*p), ncol = p)
+  
+  for(i in 1:p){ 
+    G = a %o% rand[,i]
+    E[,,i] = t(G)
+  }
+  if(abs(delta) > 1e-8){
+    A = Matrix::bandSparse(p, k = c(-1,0,1), diag = list(rep(0.1,p-1), rep(delta,p), rep(0.1, p-1))) %>% matrix(nrow = p) 
+    for(i in 2:n){
+      for(j in 1:N)
+        X[i,j,] = X[i-1,j,] %*%  A * 6 * (j/N-0.5)^2 * sin(pi*i/n/2) + E[i,j,]
+    }
+  }else{
+    X = E
+  }
+  for(i in 1:p)
+    X[,,i] = t(m + t(X[,,i]))
+  # output: matrix N*n 
+  return(list(X = X,  E = E))
+}
+
+
+fts.nonh2<- function(n = 500, N = 200, p = 3, delta = 0){
+  # mean function
+  t = (1:n)/n
+  u = (1:N)/N
+  m = (1+u)%o%(10*(t-0.5)^2 + 1) 
+  
+  # innovation function
+  a1 = 0.5*cos(pi*u/3)+0.2
+  a2 = 0.4*u
+  tw = 0.8+0.2*sin(pi*t/2)
+  # a1 = 0.1*cos(pi*u/3)+0.5
+  # a2 = 0.4*u
+  # tw = 0.5+0.5*sin(pi*t)
+  X = array(0, c(n,N,p))
+  E = array(0, c(n,N,p))
+  for(i in 1:p){
+    
+    if(rbinom(1,1,0.5))
+      G = a1 %o% (rnorm(n)*tw)
+    else 
+      G = a2 %o% (rnorm(n)*tw)
+    E[,,i] = t(G)
+  }
+  if(abs(delta) > 1e-8){
+    if(p >= 3){
+      A = Matrix::bandSparse(p, k = c(-1,0,1), diag = list(rep(0.1,p-1), rep(delta,p), rep(0.1, p-1))) %>% matrix(nrow = p) 
+      for(i in 2:n){
+        for(j in 1:N)
+          X[i,j,] = X[i-1,j,] %*%  A * 6 * (j/N-0.5)^2 * sin(pi*i/n/2) + E[i,j,]
+      }
+    }else{
+      for(i in 2:n){
+        for(j in 1:N)
+          X[i,j,] = X[i-1,j,] *  delta * 6 * (j/N-0.5)^2 * sin(pi*i/n/2) + E[i,j,]
+      }
+    }
+    
+  }else{
+    X = E
+  }
+  for(i in 1:p)
+    X[,,i] = t(m + t(X[,,i]))
+  # output: matrix N*n 
+  return(list(X = X,  E = E))
+}
+
+library(MASS)
+##time varying functional garch (1,1)
+fgarch11 <- function (N, J, alpha_func, burn_in = 50){
+  
+  grid <- (1:J)/J
+  error_mat <- matrix(nrow = J, ncol = N + burn_in)
+  # covariance_mat <- matrix(0, nrow = J, ncol = J)
+  
+  a1 = 0.1*cos(pi*grid/3)+0.5
+  # a1 = 0.5*cos(pi*grid/3)+0.2
+  a2 = 0.4*grid
+  
+  # for (i in 1:J) {
+  #     for (j in 1:J) {
+  #         covariance_mat[i, j] <- exp(-(grid[i] + grid[j])/2) * 
+  #             min(exp(grid[i]), exp(grid[j]))
+  #     }
+  # }
+  # means <- rep(0, J)
+  
+  # for (i in 1:(N + burn_in)) {
+  if(rbinom(1,1,0.5))
+    error_mat = a1 %o% tvgarch11(N + burn_in,
+                                 c(0.8, 1, 0.1, 0.2),
+                                 c(0.1, 0.2),
+                                 ntrans = 100)
+  else 
+    error_mat = a2 %o% tvgarch11(N + burn_in,
+                                 c(0.8, 1, 0.1, 0.2),
+                                 c(0.1, 0.2),
+                                 ntrans = 100)
+  return(error_mat[, (burn_in + 1):(burn_in + N)])
+}
+
+# library(wwntests)
+library(magrittr)
+
+tvgarch11<-function (T_n, a , b, rnd = rnorm, ntrans = 200, ...){
+  # alpha p*n
+  # beta p*n
+  n = T_n
+  total.n = n + ntrans
+  alpha = matrix(c((a[2]-a[1])/2*cos(pi/3+ 2*pi*seq(0, 1, length.out =  total.n))
+                   +(a[2]+a[1])/2,
+                   seq(a[3], a[4], length.out =  total.n)),
+                 byrow = T, nrow=2)
+  beta = matrix(seq(b[1], b[2], length.out = n + ntrans), nrow=1)
+  if (!missing(beta))
+    p = nrow(beta)
+  else p = 0
+  if (!missing(alpha))
+    q = nrow(alpha) - 1
+  else stop("beta is missing!")
+  if (q == 0)
+    stop("Check model: q=0!")
+  if(ncol(alpha) == ncol(beta))
+    n = ncol(alpha)
+  else
+    stop("Check alpha and beta!")
+  e = rnd(total.n, ...)            # generate innovations
+  x = double(total.n)              # create double precision vector
+  sigt = x
+  d = max(p, q)
+  
+  for(i in 1:d){
+    sigma2 = sum(alpha[-1,i])   #?
+    if (p > 0)
+      sigma2 = sigma2 + sum(beta[,i])
+    if (sigma2 > 1)
+      stop("Check model: it does not have finite variance")
+    sigma2 = alpha[1,i]/(1 - sigma2)
+    if (sigma2 <= 0)
+      stop("Check model: it does not have positive variance")
+    x[i] = rnd(d, sd = sqrt(sigma2))
+    sigt[i] = sigma2
+  }
+  xtmp = x
+  
+  for (i in (d + 1):total.n) {
+    for(j in (d + 1):i){
+      sigt[j] = sum(alpha[,i] * c(1, xtmp[j - (1:q)]^2)) + sum(beta[,i] * sigt[j - (1:p)])
+      xtmp[j] = e[j] * sqrt(sigt[j])
+    }
+    x[i] = e[i] * sqrt(sigt[i])
+  }
+  
+  return(x[(ntrans + 1):total.n])
+}
+
+
+fts.far <- function (n = 200, N = 50, p = 3, delta = 0, burn_in = 50){
+  
+  #     if (type == "IID") {
+  #         error_mat <- brown_motion(N + burn_in, J)
+  #     }
+  #     else if (type == "fGARCH") {
+  #     }
+  grid <- (1:N)/N  
+  t = (1:n)/n
+  u = (1:N)/N
+  m = (1+u)%o%(10*(t-0.5)^2 + 1) 
+  
+  X = array(0, c(n + burn_in, N, p))
+  E = array(0, c(n + burn_in, N, p))
+  for(i in 1:p){
+    if(rbinom(1,1,0.5))
+      G <- fgarch11(n + burn_in, N, alpha3) # J * N 
+    else 
+      G <- fgarch11(n + burn_in, N, alpha4)  # J * N 
+    
+    E[,,i] = t(G)
+  }
+  
+  
+  X = E
+  
+  
+  func <- function(t, s) {
+    exp(-((t^2 + s^2)/2))
+  }
+  phi_c_t_s <- function(t, s, c = abs_c) {
+    c * exp(-((t^2 + s^2)/2))
+  }
+  
+  if(abs(delta) > 1e-8){
+    sum1 <- 0
+    for (t in grid) {
+      for (s in grid) {
+        sum1 <- sum1 + (func(t, s)^2)
+      }
+    }
+    phi_norm_w_out_c <- sqrt(sum1/(N^2))
+    abs_c <- delta/phi_norm_w_out_c
+    
+    #   A = Matrix::bandSparse(p, k = c(-2,-1,0,1,2), diag = list(rep(delta^3,p-2), rep(delta^2,p-1), rep(delta,p), rep(delta^2, p-1), rep(delta^3,p-2))) %>% matrix(nrow = p) 
+    
+    for(i in 2:n){
+      for(j in 1:N){
+        far_mat =  X[i-1, ,]
+        X[i,j,] = t(t(phi_c_t_s(grid[j], grid, abs_c)/N) %*% far_mat *(1 +0.25* cos(pi*i/n/2))) + E[i,j,]
+      }
+    }
+  }
+  
+  for(i in 1:p)
+    X[(burn_in+1): (burn_in + n),,i] = t(m + t(X[(burn_in+1): (burn_in + n),,i]))
+  # output: matrix N*n 
+  return(list(X = X[(burn_in+1): (burn_in + n),,],  E = E[(burn_in+1): (burn_in + n),,]))
+}

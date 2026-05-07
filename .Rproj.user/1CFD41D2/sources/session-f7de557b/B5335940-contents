@@ -1,0 +1,139 @@
+
+library(tidyverse)
+library(lubridate)
+# Define the path to your Kaggle download folder
+path <- "/Users/lujiabai/Documents/Github/portmanftsplus/pjm_data/"
+files <- list.files(path, pattern = "*.csv", full.names = TRUE)
+
+library(tidyverse)
+
+# 1. Create a list of cleaned dataframes
+df_list <- files %>%
+  map(~{
+    data <- read_csv(.x, show_col_types = FALSE) %>% 
+      rename_with(tolower)
+    
+    # Identify the load column (usually the 2nd one)
+    region_name <- gsub("_hourly.csv", "", basename(.x))
+    
+    data %>%
+      select(datetime, load = 2) %>%
+      rename(!!region_name := load) # Dynamically name the column by region
+  })
+
+# 2. Progressively inner_join all of them by 'datetime'
+df_wide <- df_list %>% 
+  reduce(inner_join, by = "datetime") #
+
+
+library(lubridate)
+
+
+unique(as.Date(df_wide$datetime))
+# Add Date and Hour identifiers
+df_prepared <- df_wide %>%
+  mutate(date = as.Date(datetime),
+         hour = hour(datetime)) %>%
+  arrange(date, hour) %>%
+  # Filter out days that don't have exactly 24 hours (important for functional data)
+  group_by(date) %>%
+  filter(n() == 24) %>%
+  ungroup()
+
+# Identify dimensions
+unique_dates <- unique(df_prepared$date)
+n_days <- length(unique_dates)
+n_hours <- 24
+# Exclude datetime, date, and hour to count regions
+region_names <- setdiff(names(df_prepared), c("datetime", "date", "hour"))
+n_regions <- length(region_names)
+
+
+data_matrix <- as.matrix(df_prepared[, region_names])
+
+# Initialize the 3D array: [Days, Hours, Regions]
+mfts_array <- array(NA, dim = c(n_days, n_hours, n_regions))
+
+# Fill the array
+for(r in 1:n_regions) {
+  # For each region, we take its column and fold it into a [Days x Hours] matrix
+  mfts_array[,,r] <- matrix(data_matrix[, r], nrow = n_days, ncol = n_hours, byrow = TRUE)
+}
+
+# Assign names for easy indexing
+dimnames(mfts_array) <- list(
+  as.character(unique_dates), 
+  paste0("H", 1:24), 
+  region_names
+)
+fts = mfts_array
+
+fts_norm <- array(NA, dim = dim(mfts_array))
+
+for (j in 1:dim(mfts_array)[3]) {        # loop over companies
+  for (i in 1:dim(mfts_array)[1]) {      # loop over days
+    x <- fts[i, , j]
+    fts_norm[i, , j] <- (x - mean(x)) / sd(x)
+  }
+}
+
+normalize <- function(x) {
+  t(apply(x, 1, function(row) (row - mean(row)) / sd(row)))
+}
+
+
+
+fts = fts_norm[500:1000,,]
+pjmfts = fts
+usethis::use_data(pjmfts, overwrite = TRUE)
+
+c1 <- normalize(fts[seq(1,500,length.out= 5),,1])
+c2 <- normalize(fts[seq(1,500,length.out= 5),,2])
+c3 <- normalize(fts[seq(1,500,length.out= 5),,3])
+
+matplot(t(c1), type="l", col="blue", lty=1)
+matlines(t(c2), col="red", lty=1)
+matlines(t(c3), col="green", lty=1)
+
+legend("topright",
+       legend=c("Company 1","Company 2","Company 3"),
+       col=c("blue","red","green"), lty=1)
+unique_dates[seq(1,500,length.out= 5)+499]
+
+
+c1 <- normalize(fts[seq(1,500,length.out=6),,1])
+c2 <- normalize(fts[seq(1,500,length.out=6),,2])
+c3 <- normalize(fts[seq(1,500,length.out=6),,3])
+
+# 5 panels (one per day)
+par(mfrow = c(2, 3))
+
+for (i in 1:nrow(c1)) {
+  matplot(t(c1[i,,drop=FALSE]),
+          type = "l",
+          col = "blue",
+          lty = 1,
+          ylim = range(c(c1[i,], c2[i,], c3[i,])),
+          main =   unique_dates[seq(1,500,length.out= 6)+499][i],
+          xlab = "Time",
+          ylab = "Value")
+  
+  matlines(t(c2[i,,drop=FALSE]), col = "red", lty = 1)
+  matlines(t(c3[i,,drop=FALSE]), col = "green", lty = 1)
+  
+  legend("bottomright",
+         legend = c("Company 1","Company 2","Company 3"),
+         col = c("blue","red","green"),
+         lty = 1,
+         cex = 0.8)
+}
+
+
+# original test
+result = fport(fts, 3, lb=1, ub=3)
+print(result$pvalue)
+
+# extended test
+resulte = fport_extend(fts, 3, lb=1, ub=3)
+print(resulte$pvalue)
+

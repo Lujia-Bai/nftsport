@@ -1,0 +1,89 @@
+
+library(tidyverse)
+library(lubridate)
+# Define the path to your Kaggle download folder
+path <- "/Users/lujiabai/Documents/Github/portmanftsplus/pjm_data/"
+files <- list.files(path, pattern = "*.csv", full.names = TRUE)
+
+library(tidyverse)
+
+# 1. Create a list of cleaned dataframes
+df_list <- files %>%
+  map(~{
+    data <- read_csv(.x, show_col_types = FALSE) %>% 
+      rename_with(tolower)
+    
+    # Identify the load column (usually the 2nd one)
+    region_name <- gsub("_hourly.csv", "", basename(.x))
+    
+    data %>%
+      select(datetime, load = 2) %>%
+      rename(!!region_name := load) # Dynamically name the column by region
+  })
+
+# 2. Progressively inner_join all of them by 'datetime'
+df_wide <- df_list %>% 
+  reduce(inner_join, by = "datetime") #
+
+
+library(lubridate)
+
+
+unique(as.Date(df_wide$datetime))
+# Add Date and Hour identifiers
+df_prepared <- df_wide %>%
+  mutate(date = as.Date(datetime),
+         hour = hour(datetime)) %>%
+  arrange(date, hour) %>%
+  # Filter out days that don't have exactly 24 hours (important for functional data)
+  group_by(date) %>%
+  filter(n() == 24) %>%
+  ungroup()
+
+# Identify dimensions
+unique_dates <- unique(df_prepared$date)
+n_days <- length(unique_dates)
+n_hours <- 24
+# Exclude datetime, date, and hour to count regions
+region_names <- setdiff(names(df_prepared), c("datetime", "date", "hour"))
+n_regions <- length(region_names)
+
+
+data_matrix <- as.matrix(df_prepared[, region_names])
+
+# Initialize the 3D array: [Days, Hours, Regions]
+mfts_array <- array(NA, dim = c(n_days, n_hours, n_regions))
+
+# Fill the array
+for(r in 1:n_regions) {
+  # For each region, we take its column and fold it into a [Days x Hours] matrix
+  mfts_array[,,r] <- matrix(data_matrix[, r], nrow = n_days, ncol = n_hours, byrow = TRUE)
+}
+
+# Assign names for easy indexing
+dimnames(mfts_array) <- list(
+  as.character(unique_dates), 
+  paste0("H", 1:24), 
+  region_names
+)
+fts = mfts_array
+
+fts_norm <- array(NA, dim = dim(mfts_array))
+
+for (j in 1:dim(mfts_array)[3]) {        # loop over companies
+  for (i in 1:dim(mfts_array)[1]) {      # loop over days
+    x <- fts[i, , j]
+    fts_norm[i, , j] <- (x - mean(x)) / sd(x)
+  }
+}
+
+normalize <- function(x) {
+  t(apply(x, 1, function(row) (row - mean(row)) / sd(row)))
+}
+
+
+
+fts = fts_norm[500:1000,,]
+pjmfts = fts
+rownames(pjmfts) =  unique_dates[500:1000]
+usethis::use_data(pjmfts, overwrite = TRUE)

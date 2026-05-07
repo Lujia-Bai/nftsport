@@ -1,0 +1,29 @@
+Package: nftsport
+Type: Package
+Title: A portmanteau test for multivariate  non-stationary functional time series with an increasing number of lags
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Lujia", "Bai",
+      email = "lujia.bai@rub.de",
+      role = c("aut", "cre")
+    )
+  )
+Description: Bootstrap-based portmanteau tests for multivariate  non-stationary functional time series with an increasing number of lags with a data example in energy.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 3.5)
+RoxygenNote: 7.3.2
+Imports:
+    Rcpp,
+    RcppArmadillo,
+    RcppRoll
+LinkingTo:
+    Rcpp,
+    RcppArmadillo
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

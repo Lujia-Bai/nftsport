@@ -1,0 +1,48 @@
+#' Hourly Energy Consumption Functional Time Series
+#'
+#' A three-dimensional functional time series of hourly electricity
+#' consumption measured in megawatts (MW) for three U.S. energy markets:
+#' American Electric Power, The Dayton Power and Light Company,
+#' and Northern Illinois Hub.
+#'
+#' Each daily observation is treated as a continuous function observed
+#' over a 24-hour period.
+#'
+#' @format A three-dimensional array containing 501 daily observations:
+#' \describe{
+#'   \item{Dimension 1}{Days (501 observations).}
+#'   \item{Dimension 2}{Hourly measurements over 24 hours.}
+#'   \item{Dimension 3}{Energy markets/components.}
+#' }
+#'
+#' @details
+#' The dataset covers the period from February 16, 2006,
+#' to July 4, 2007, corresponding to 501 days with complete
+#' hourly records.
+#'
+#' The year 2006 was among the warmest years globally,
+#' motivating the study of electricity consumption dynamics
+#' during this period.
+#'
+#' The three components correspond to:
+#' \enumerate{
+#'   \item American Electric Power (AEP)
+#'   \item The Dayton Power and Light Company (DAYTON)
+#'   \item Northern Illinois Hub (NI HUB)
+#' }
+#'
+#' All measurements are recorded in megawatts (MW).
+#'
+#' @source Publicly available U.S. electricity market data.
+#'
+#' @examples
+#' data(pjmfts)
+#'
+#' dim(pjmfts)
+#'
+#' @usage data(pjmfts)
+#'
+#' @docType data
+#' @keywords datasets
+#' @name pjmfts
+NULL
