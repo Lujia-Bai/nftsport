@@ -69,3 +69,22 @@ including non-concurrent functional observations
 resulte = fport_extend(fts, 3, lb=1, ub=3)
 print(resulte$pvalue)
 ```
+
+
+
+## Citation
+
+If you use `nftsport` in your research, please cite it as:
+
+> Lujia Bai (2026). nftsport: Portmanteau Tests for Functional Time Series. 
+> R package version 0.1.0. Available at https://github.com/Lujia-Bai/nftsport
+
+BibTeX entry:
+```bibtex
+@Manual{,
+  title = {nftsport: Portmanteau Tests for Functional Time Series},
+  author = {Lujia Bai},
+  year = {2026},
+  note = {R package version 0.1.0},
+  url = {[https://github.com/yourusername/nftsport](https://github.com/yourusername/nftsport)},
+}
